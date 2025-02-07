@@ -35,5 +35,7 @@ module Top_Module (
 	.clk_40Hz(clk_40Hz)
 	);
 	
+ 	parameter CLK_FREQ = 12090000;  // 기본값 12.09MHz
 
+	
 endmodule
