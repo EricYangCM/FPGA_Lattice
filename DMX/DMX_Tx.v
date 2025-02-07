@@ -141,7 +141,10 @@ module DMX_Tx #(
 
                 // **Stop Bit (2개) 전송**
                 5: begin
-                    if (counter < 2 * BIT_TIME) counter <= counter + 1;
+                    if (counter < 2 * BIT_TIME) begin
+						tx <= 1;
+						counter <= counter + 1;
+					end
                     else begin
                         counter <= 0;
                         state <= 6;
