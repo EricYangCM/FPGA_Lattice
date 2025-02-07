@@ -17,6 +17,10 @@ module Top_Module (
         .OSC(clk)      // clk 신호에 연결
     );
 
+
+	parameter CLK_FREQ = 12090000;  // 기본값 12.09MHz
+
+
 	// Reset Gen
 	wire rst_n;
 	ResetGen resetGen_inst(
@@ -26,16 +30,45 @@ module Top_Module (
 	
 	
 	// Clock Gen
-	ClockGen clock_inst(
+	ClockGen #(.CLK_FREQ(CLK_FREQ)) clock_inst(
 	.clk_In(clk),
 	.rst_n(rst_n),
 	.clk_1Hz(clk_1Hz),
 	.clk_250kHz(clk_250kHz),
+	.clk_10Hz(clk_10Hz),
+	.clk_20Hz(clk_20Hz),
 	.clk_30Hz(clk_30Hz),
 	.clk_40Hz(clk_40Hz)
 	);
 	
- 	parameter CLK_FREQ = 12090000;  // 기본값 12.09MHz
 
+
+
+	// DMX 송신 모듈
+    DMX_Tx #(.CLK_FREQ(CLK_FREQ)) dmx_tx_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .send_trigger(send_trigger),
+        .dmx_data(dmx_data),
+        .tx(tx),
+        .tx_active(tx_active)
+    );
 	
+	
+	
+    //LED Shift 모듈 인스턴스 (4개 LED 순차 이동)
+    LED_Shift led_shift_inst (
+        .clk(clk_1Hz),
+		.rst_n(rst_n),
+        .LED(LED[3:0])
+    );
+	
+	//LED Shift 모듈 인스턴스 (4개 LED 순차 이동)
+    LED_Shift led_shift_inst2 (
+        .clk(clk_20Hz),
+		.rst_n(rst_n),
+        .LED(LED[7:4])
+    );
+
+
 endmodule
