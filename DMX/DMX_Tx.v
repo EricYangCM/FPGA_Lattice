@@ -16,7 +16,8 @@ module DMX_Tx #(
     localparam integer BIT_TIME = CLK_FREQ / BAUD_RATE;  // 48 (for 12.09MHz clock)
 
     // **DMX Timing Constants**
-    localparam integer BREAK_TIME = (CLK_FREQ / 1000000) * 180;  // BREAK 기간 (180μs)
+    //localparam integer BREAK_TIME = (CLK_FREQ / 1000000) * 180;  // BREAK 기간 (180μs)
+	localparam integer BREAK_TIME = (CLK_FREQ / 1000000) * 100;  // BREAK 기간 (100μs)
     localparam integer MAB_TIME   = (CLK_FREQ / 1000000) * 20;   // MARK After Break (20μs)
 
     reg [31:0] packet_timer;
@@ -46,22 +47,16 @@ module DMX_Tx #(
 			packet_counter <= 0;
 			start_tx <= 0;
 		end else if (enable) begin
-			if (busy) begin  
-				// 현재 전송 중이면 패킷 타이머를 멈추고 기다림
-				packet_counter <= 0;  
-				start_tx <= 0;
-			end else if (packet_counter >= packet_timer) begin
-				// ?? busy가 끝났다면 바로 다음 패킷 전송 시작
-				start_tx <= 1;  
-				packet_counter <= 0;
+			if (packet_counter > packet_timer) begin
+					start_tx <= 1;
+					packet_counter <= 0;  // 타이머 리셋
 			end else begin
-				start_tx <= 0;
-				packet_counter <= packet_counter + 1;
+				packet_counter <= packet_counter + 1; // 항상 증가
+				start_tx <= 0;	// 1 clock 동안만 set
 			end
-		end else begin
-			start_tx <= 0;
 		end
 	end
+
 
     // **FSM - num_bytes 개수만큼 송신**
     always @(posedge clk or negedge rst_n) begin
@@ -77,7 +72,7 @@ module DMX_Tx #(
             case (state)
                 0: begin
                     if (start_tx) begin
-                        state <= 1;
+						state <= 1;
                         busy <= 1;
                         counter <= 0;
                         byte_index <= 0;
@@ -109,12 +104,12 @@ module DMX_Tx #(
                     if (counter < BIT_TIME) counter <= counter + 1;
                     else begin
                         counter <= 0;
-						bit_index <= bit_index + 1;
+						bit_index <= bit_index + 1;		// Start bit + 0x00
 						
                         if(bit_index == 8) begin
 							tx <= 1;				// set to high for 2 stop bits
 							end
-						else if(bit_index == 10) begin
+						else if(bit_index == 9) begin
 							bit_index <= 0;
 							state <= 4;		// next
 							end
@@ -142,6 +137,7 @@ module DMX_Tx #(
 
                         if (bit_index == 8) begin
                             bit_index <= 0;
+							tx <= 1;		// set stop bit
                             byte_index <= byte_index + 1;
                             state <= 6;
                         end
@@ -149,10 +145,8 @@ module DMX_Tx #(
                 end
 
                 6: begin // **Stop Bit (2-bit HIGH) 전송**
-                    if (counter < 2 * BIT_TIME) begin
-                        tx <= 1;
-                        counter <= counter + 1;
-                    end else begin
+                    if (counter < BIT_TIME) counter <= counter + 1;
+                    else begin
                         counter <= 0;
                         if (byte_index < num_bytes) begin
                             shift_reg <= dmx_data[byte_index*8+:8];
