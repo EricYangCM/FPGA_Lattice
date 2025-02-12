@@ -1,0 +1,13 @@
+module DMX_Rx #(
+    parameter CLK_FREQ = 12090000,  // 시스템 클럭 (12.09MHz)
+    parameter BAUD_RATE = 250000    // DMX 속도 (250kbps)
+)(
+	output reg [7:0] LED_TP,		// Test LED
+	output reg TP,					// Test Pin
+	
+    input wire clk,                // 시스템 클럭
+    input wire rst_n,              // Active Low 리셋
+    input wire enable,             // 수신 활성화 신호
+    input wire dmx_in /* synthesis syn_force_pads=1 syn_noprune=1 */,    // DMX 입력 신호 (UART Rx) 강제 삭제 방지
+    output reg [8*512-1:0] dmx_data // DMX 데이터 저장 (1차원 벡터)
+);
