@@ -16,7 +16,6 @@ module DMX_Tx #(
     localparam integer BIT_TIME = CLK_FREQ / BAUD_RATE;  // 48 (for 12.09MHz clock)
 
     // **DMX Timing Constants**
-    //localparam integer BREAK_TIME = (CLK_FREQ / 1000000) * 180;  // BREAK 기간 (180μs)
 	localparam integer BREAK_TIME = (CLK_FREQ / 1000000) * 100;  // BREAK 기간 (100μs)
     localparam integer MAB_TIME   = (CLK_FREQ / 1000000) * 20;   // MARK After Break (20μs)
 
