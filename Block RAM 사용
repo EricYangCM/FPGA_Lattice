@@ -1,0 +1,2 @@
+// **DMX Tx Dimming Register Map
+	(* ram_style="block" *) reg [8*513-1:0] Tx_DimmingRegMap;
