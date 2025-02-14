@@ -1,3 +1,7 @@
+** top module 설정법
+	-> Project -> Active implementation -> Set Top level Unit
+
+
 module Top_Module (
     output wire TX,          // DMX 송신 핀
     output wire [7:0] LED,    // 8개 LED 출력
