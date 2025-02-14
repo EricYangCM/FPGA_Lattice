@@ -1,2 +1,13 @@
-// **DMX Tx Dimming Register Map
-	(* ram_style="block" *) reg [8*513-1:0] Tx_DimmingRegMap;
+
+** IPExpress 에서 ipx 생성 후 인스턴스 만들어서 사용
+
+
+wire [9:0] tempMem_Addr;
+	wire [7:0] tempMem_Data;
+	EBR_DMX_Tx_DimmingData tempMem_inst (
+		.ClockA(clk),
+        .ClockEnA(1'b1),
+        .WrA(0),  // 0 : read
+        .AddressA(tempMem_Addr),
+        .QA(tempMem_Data)
+	);
