@@ -1,4 +1,4 @@
-`include "efb_define_def.v"
+`include "i2c_slave_def.v"
 `timescale 1 ns / 1 ns
 
 module i2c_slave_simple #(
