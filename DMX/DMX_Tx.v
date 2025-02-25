@@ -6,10 +6,13 @@ module DMX_Tx #(
     input wire rst_n,             // Active-Low 리셋
     input wire enable,            // 송출 활성화 신호 (HIGH: 계속 송출, LOW: 현재 송출 종료 후 멈춤)
     input wire [9:0] num_bytes,   // 송출할 데이터 개수 (1~512)
-    input wire [8*512-1:0] dmx_data,  // 전송할 DMX 데이터 (SC + 최대 512채널 데이터)
+	input wire [7:0] EBR_Data,			// DMX 데이터의 EBR Data
+	
     input wire [1:0] mode_select, // DMX 모드 선택 (00: 10Hz, 01: 20Hz, 10: 30Hz, 11: 40Hz)
     output reg tx,                // RS-485 송신 신호 (DMX 데이터 송출)
-    output reg busy               // 송신 중 여부 (HIGH: 송출 중, LOW: 대기)
+    output reg busy,               // 송신 중 여부 (HIGH: 송출 중, LOW: 대기)
+	output reg [9:0] EBR_Addr,			// DMX 데이터 EBR의 Address
+	output reg TP
 );
 
     // **Baud Rate Generator (250kbps = 4μs per bit)**
@@ -76,6 +79,7 @@ module DMX_Tx #(
                         counter <= 0;
                         byte_index <= 0;
 						bit_index <= 0;
+						EBR_Addr <= 0;  // Data Address 초기화
                     end
                 end
 
@@ -93,40 +97,23 @@ module DMX_Tx #(
                     if (counter < MAB_TIME) counter <= counter + 1;
                     else begin
                         counter <= 0;
-                        shift_reg <= dmx_data[byte_index*8+:8];  // **첫 바이트 로드**
-						tx <= 0;		// Start Code Set
+                        shift_reg <= EBR_Data;  // **첫 바이트 로드**
+						EBR_Addr <= EBR_Addr + 1;	// 바이트 주소 이동
                         state <= 3;
                     end
                 end
 				
-				3: begin // **Start Code (0x00) 전송**
-                    if (counter < BIT_TIME) counter <= counter + 1;
-                    else begin
-                        counter <= 0;
-						bit_index <= bit_index + 1;		// Start bit + 0x00
-						
-                        if(bit_index == 8) begin
-							tx <= 1;				// set to high for 2 stop bits
-							end
-						else if(bit_index == 9) begin
-							bit_index <= 0;
-							state <= 4;		// next
-							end
-                    end
-                end
-				
-				
 
-                4: begin // **Start Bit 전송**
+                3: begin // **Start Bit 전송**
                     if (counter < BIT_TIME) counter <= counter + 1;
                     else begin
                         counter <= 0;
                         tx <= 0;  // **Start Bit 추가**
-                        state <= 5;
+                        state <= 4;
                     end
                 end
 
-                5: begin // **8-bit 데이터 전송**
+                4: begin // **8-bit 데이터 전송**
                     if (counter < BIT_TIME) counter <= counter + 1;
                     else begin
                         counter <= 0;
@@ -138,26 +125,29 @@ module DMX_Tx #(
                             bit_index <= 0;
 							tx <= 1;		// set stop bit
                             byte_index <= byte_index + 1;
-                            state <= 6;
+                            state <= 5;
                         end
+						
+						TP <= !TP;
                     end
                 end
 
-                6: begin // **Stop Bit (2-bit HIGH) 전송**
+                5: begin // **Stop Bit (2-bit HIGH) 전송**
                     if (counter < BIT_TIME) counter <= counter + 1;
                     else begin
                         counter <= 0;
                         if (byte_index < num_bytes) begin
-                            shift_reg <= dmx_data[byte_index*8+:8];
-                            state <= 4;  // **Start Bit부터 다시 전송**
+                            shift_reg <= EBR_Data;  // **첫 바이트 로드**
+							EBR_Addr <= EBR_Addr + 1;	// 바이트 주소 이동
+                            state <= 3;  // **Start Bit부터 다시 전송**
                         end else begin
                             busy <= 0;
-                            state <= enable ? 0 : 7;
+                            state <= enable ? 0 : 6;
                         end
                     end
                 end
 				
-                7: begin // **Idle 상태 (Enable OFF)**
+                6: begin // **Idle 상태 (Enable OFF)**
                     tx <= 1;
                     state <= 0;
                 end
