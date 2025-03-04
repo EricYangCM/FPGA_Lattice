@@ -14,24 +14,23 @@ module SPI_Slave(
     reg [7:0] byte_buffer;  // 송수신 바이트 버퍼
     reg [7:0] addr_buffer;  // 어드레스 버퍼
     reg [4:0] spi_state;    // SPI 상태 FSM
-	reg edge_toggle;
+    reg edge_toggle;
 
     integer i;
     reg [7:0] Registers [0:49]; // 내부 레지스터
 	
-	reg sck_sync1, sck_sync2;
-	wire sck_rising = (sck_sync1 == 1'b1) && (sck_sync2 == 1'b0); // Rising Edge 감지
-	wire sck_falling = (sck_sync1 == 1'b0) && (sck_sync2 == 1'b1); // Falling Edge 감지
+    reg sck_sync1, sck_sync2;
+    wire sck_rising = (sck_sync1 == 1'b1) && (sck_sync2 == 1'b0); // Rising Edge 감지
+    wire sck_falling = (sck_sync1 == 1'b0) && (sck_sync2 == 1'b1); // Falling Edge 감지
 
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            miso <= 0;
-            sck_prev <= 1;
-            bit_cnt <= 0;
-            spi_state <= 0;
-
-			sck_sync1 <= 1'b1;
-			sck_sync2 <= 1'b1;
+	if (!rst_n) begin
+		miso <= 0;
+		sck_prev <= 1;
+		bit_cnt <= 0;
+		spi_state <= 0;
+		sck_sync1 <= 1'b1;
+		sck_sync2 <= 1'b1;
 			
 			
             // 내부 레지스터 초기화
