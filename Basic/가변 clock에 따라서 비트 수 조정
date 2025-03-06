@@ -1,0 +1,22 @@
+
+** 입력 된 CLK_FREQ에 따라서 비트 타이머의 크기를 자동 조정할 수 있음
+
+
+// **DMX Timing Parameters**
+    localparam BIT_TIME   = CLK_FREQ / BAUD_RATE; // 1비트 클럭 사이클 수 (250kbps 기준 4μs)
+    localparam HALF_BIT_TIME  = BIT_TIME / 2;     // 중앙 샘플링용 2μs
+    localparam BREAK_TIME = (CLK_FREQ / 1000000) * 88;  // BREAK 최소 88μs
+    localparam MAB_TIME   = (CLK_FREQ / 1000000) * 8;   // MAB 최소 8μs
+    localparam PACKET_END_TIMEOUT = (CLK_FREQ / 1000000) * 16;  // **패킷 종료 타임아웃 16μs**
+	localparam NEW_PACKET_RX_TIMEOUT = CLKFREQ;			// 새로운 패킷 수신 타임아웃 1sec
+
+    // **비트 타이머 크기 자동 계산 (? BIT_TIMER_WIDTH 선언 추가)**
+    localparam integer MAX_TIME_1S = CLK_FREQ; 
+    localparam integer BIT_TIMER_WIDTH = $clog2(MAX_TIME_1S); // 최소한의 비트 수 계산
+	
+	// **Registers (? BIT_TIMER_WIDTH 기반 레지스터 선언)**
+    reg [BIT_TIMER_WIDTH-1:0] bit_timer;
+    reg [BIT_TIMER_WIDTH-1:0] bit_sample_timer;
+    reg [BIT_TIMER_WIDTH-1:0] break_width, mab_width;
+    reg [BIT_TIMER_WIDTH-1:0] packet_timeout;  // **패킷 종료 타이머**
+	reg [BIT_TIMER_WIDTH-1:0] new_packet_rx_timeout;	// 새로운 패킷 수신 타임아웃 1sec
