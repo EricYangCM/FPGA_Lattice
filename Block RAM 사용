@@ -1,13 +1,13 @@
 
 ** IPExpress 에서 ipx 생성 후 인스턴스 만들어서 사용
-
+** Clock En에다가 1 넣으면 동작.
 
 wire [9:0] tempMem_Addr;
-	wire [7:0] tempMem_Data;
-	EBR_DMX_Tx_DimmingData tempMem_inst (
-		.ClockA(clk),
+wire [7:0] tempMem_Data;
+EBR_DMX_Tx_DimmingData tempMem_inst (
+	.ClockA(clk),
         .ClockEnA(1'b1),
         .WrA(0),  // 0 : read
         .AddressA(tempMem_Addr),
         .QA(tempMem_Data)
-	);
+);
