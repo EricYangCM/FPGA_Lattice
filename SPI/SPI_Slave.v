@@ -1,7 +1,7 @@
 // LSB First, Clock = high, Phase = 2 edge (SPI Mode 3)
 // Protocol : CS low -> W/R + 15-bit Memory Address -> Data
 module SPI_Slave #(
-parameter REGISTER_BYTE_SIZE = 400  // 내부 레지스터 바이트 사이즈
+parameter REGISTER_BYTE_SIZE = 64  // 내부 레지스터 바이트 사이즈
 )
 (
     input  wire        clk,      // FPGA 시스템 클럭
@@ -12,7 +12,7 @@ parameter REGISTER_BYTE_SIZE = 400  // 내부 레지스터 바이트 사이즈
     input  wire        mosi,     // Master → Slave 데이터
     output reg         miso,     // Slave → Master 데이터
 	
-    output reg [399:0] Register_Bits // 내부 레지스터
+    output reg [(REGISTER_BYTE_SIZE*8)-1:0] Register_Bits	// 내부 레지스터
 );
 
     reg        sck_prev;
