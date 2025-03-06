@@ -1,0 +1,19 @@
+// DMX Input
+localparam DMX_BUFFER_SIZE = 20;
+wire [8*DMX_BUFFER_SIZE:0] DMX_Data_A;
+wire [9:0] DMX_N_Of_Data_A;
+wire DMX_Signal_EN_A;
+DMX_Input_Module #(
+		.CLK_FREQ(12000000),
+		.DMX_BUFFER_SIZE(DMX_BUFFER_SIZE)
+)DMX_In_A(
+		.clk(clk),
+		.rst_n(rst_n),
+		.DMX_Input_Signal(DMX_Input_Signals[0]),
+		
+		.DMX_Data(DMX_Data_A),
+		.N_Of_Data(DMX_N_Of_Data_A),
+		.Signal_EN(DMX_Signal_EN_A)
+);
+
+
