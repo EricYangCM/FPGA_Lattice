@@ -1,0 +1,11 @@
+// SPI Interface Register
+wire [399:0] Registers;
+SPI_Slave SPI_Slave_inst(
+	.clk(clk),
+	.rst_n(rst_n),
+	.sck(sck),
+	.cs(cs),
+	.mosi(mosi),
+	.miso(miso),
+	.Register_Bits(Registers)
+);
