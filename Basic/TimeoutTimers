@@ -1,3 +1,8 @@
+
+*** enable에다가 0 주면 대기상태 및 초기화 ***
+*** enable에다가 1 주면 타이머 시작되고 설정된 시간 후에 timeout이 set됨 ***
+
+
 // Timeout_Timer_us.v
 module Timeout_Timer_us #(
     parameter CLK_FREQ = 40_000_000,
