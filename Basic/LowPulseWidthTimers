@@ -1,0 +1,156 @@
+** Low Pulse 발생 후 valid가 1클락동안 set 되면서 low_time에 시간이 기록됨
+
+
+
+// Low Pulse Width Timer (us)
+module LowPulseWidthTimer_us #(
+    parameter CLK_FREQ = 40_000_000
+)(
+    input  wire clk,
+    input  wire rst_n,
+    input  wire signal_in,
+    output reg  valid,
+    output reg [31:0] low_time_us
+);
+
+    reg [1:0] sync_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            sync_reg <= 2'b11;
+        else
+            sync_reg <= {sync_reg[0], signal_in};
+    end
+    wire signal_sync = sync_reg[1];
+
+    reg [31:0] counter;
+    reg measuring;
+    localparam integer CLK_PER_US = CLK_FREQ / 1_000_000;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            valid <= 0;
+            low_time_us <= 0;
+            measuring <= 0;
+        end else begin
+            if (!signal_sync) begin
+                measuring <= 1;
+                valid <= 0;
+                if (counter < 32'hFFFFFFFF)
+                    counter <= counter + 1;
+            end else if (measuring) begin
+                measuring <= 0;
+                valid <= 1;
+                low_time_us <= counter / CLK_PER_US;
+                counter <= 0;
+            end else begin
+                valid <= 0;
+            end
+        end
+    end
+
+endmodule
+
+
+
+
+// Low Pulse Width Timer (ms)
+module LowPulseWidthTimer_ms #(
+    parameter CLK_FREQ = 40_000_000
+)(
+    input  wire clk,
+    input  wire rst_n,
+    input  wire signal_in,
+    output reg  valid,
+    output reg [31:0] low_time_ms
+);
+
+    reg [1:0] sync_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            sync_reg <= 2'b11;
+        else
+            sync_reg <= {sync_reg[0], signal_in};
+    end
+    wire signal_sync = sync_reg[1];
+
+    reg [31:0] counter;
+    reg measuring;
+    localparam integer CLK_PER_MS = CLK_FREQ / 1_000;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            valid <= 0;
+            low_time_ms <= 0;
+            measuring <= 0;
+        end else begin
+            if (!signal_sync) begin
+                measuring <= 1;
+                valid <= 0;
+                if (counter < 32'hFFFFFFFF)
+                    counter <= counter + 1;
+            end else if (measuring) begin
+                measuring <= 0;
+                valid <= 1;
+                low_time_ms <= counter / CLK_PER_MS;
+                counter <= 0;
+            end else begin
+                valid <= 0;
+            end
+        end
+    end
+
+endmodule
+
+
+
+
+// Low Pulse Width Timer (sec)
+module LowPulseWidthTimer_s #(
+    parameter CLK_FREQ = 40_000_000
+)(
+    input  wire clk,
+    input  wire rst_n,
+    input  wire signal_in,
+    output reg  valid,
+    output reg [31:0] low_time_s
+);
+
+    reg [1:0] sync_reg;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            sync_reg <= 2'b11;
+        else
+            sync_reg <= {sync_reg[0], signal_in};
+    end
+    wire signal_sync = sync_reg[1];
+
+    reg [31:0] counter;
+    reg measuring;
+    localparam integer CLK_PER_S = CLK_FREQ;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            valid <= 0;
+            low_time_s <= 0;
+            measuring <= 0;
+        end else begin
+            if (!signal_sync) begin
+                measuring <= 1;
+                valid <= 0;
+                if (counter < 32'hFFFFFFFF)
+                    counter <= counter + 1;
+            end else if (measuring) begin
+                measuring <= 0;
+                valid <= 1;
+                low_time_s <= counter / CLK_PER_S;
+                counter <= 0;
+            end else begin
+                valid <= 0;
+            end
+        end
+    end
+
+endmodule
