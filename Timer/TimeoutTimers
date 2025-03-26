@@ -1,0 +1,103 @@
+// Timeout_Timer_us.v
+module Timeout_Timer_us #(
+    parameter CLK_FREQ = 40_000_000,
+    parameter TIMEOUT_US = 1000
+)(
+    input wire clk,
+    input wire rst_n,
+    input wire enable,
+    output reg timeout
+);
+
+    localparam TIMEOUT_CYCLES = (CLK_FREQ / 1_000_000) * TIMEOUT_US;
+    reg [$clog2(TIMEOUT_CYCLES):0] counter;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            timeout <= 0;
+        end else if (enable) begin
+            if (counter >= TIMEOUT_CYCLES - 1) begin
+                timeout <= 1;
+            end else begin
+                counter <= counter + 1;
+                timeout <= 0;
+            end
+        end else begin
+            counter <= 0;
+            timeout <= 0;
+        end
+    end
+
+endmodule
+
+
+
+
+// Timeout_Timer_ms.v
+module Timeout_Timer_ms #(
+    parameter CLK_FREQ = 40_000_000,
+    parameter TIMEOUT_MS = 100
+)(
+    input wire clk,
+    input wire rst_n,
+    input wire enable,
+    output reg timeout
+);
+
+    localparam TIMEOUT_CYCLES = (CLK_FREQ / 1_000) * TIMEOUT_MS;
+    reg [$clog2(TIMEOUT_CYCLES):0] counter;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            timeout <= 0;
+        end else if (enable) begin
+            if (counter >= TIMEOUT_CYCLES - 1) begin
+                timeout <= 1;
+            end else begin
+                counter <= counter + 1;
+                timeout <= 0;
+            end
+        end else begin
+            counter <= 0;
+            timeout <= 0;
+        end
+    end
+
+endmodule
+
+
+
+// Timeout_Timer_sec.v
+module Timeout_Timer_sec #(
+    parameter CLK_FREQ = 40_000_000,
+    parameter TIMEOUT_SEC = 1
+)(
+    input wire clk,
+    input wire rst_n,
+    input wire enable,
+    output reg timeout
+);
+
+    localparam TIMEOUT_CYCLES = CLK_FREQ * TIMEOUT_SEC;
+    reg [$clog2(TIMEOUT_CYCLES):0] counter;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            counter <= 0;
+            timeout <= 0;
+        end else if (enable) begin
+            if (counter >= TIMEOUT_CYCLES - 1) begin
+                timeout <= 1;
+            end else begin
+                counter <= counter + 1;
+                timeout <= 0;
+            end
+        end else begin
+            counter <= 0;
+            timeout <= 0;
+        end
+    end
+
+endmodule
