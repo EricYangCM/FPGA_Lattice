@@ -5,33 +5,35 @@ module ByteReceiver #(
     input  wire clk,
     input  wire rst_n,
 
-    input  wire start_receive,         // 수신 시작 트리거
-    input  wire DMX_Input_Signal,      // DMX 입력
+    input  wire start_receive,
+    input  wire DMX_Input_Signal,
 
-    output reg        byte_ready,      // 1클럭 high, 바이트 수신 완료
-    output reg [7:0]  received_byte,   // 수신된 바이트
-    output reg        error,           // Stop 비트 에러 발생 시 1
-    output reg        byte_done       // 일정 시간동안 새 start bit 없으면 1클럭 high
+    output reg        byte_ready,
+    output reg [7:0]  received_byte,
+    output reg        error,
+    output reg        byte_done
 );
 
     localparam BIT_TIME       = CLK_FREQ / BAUD_RATE;       // 4us = 80 clk
-    localparam HALF_BIT_TIME  = BIT_TIME / 2;               // 2us = 40 clk
-    localparam BYTE_TIMEOUT   = (CLK_FREQ * 44) / 1_000_000; // 44us = 880 clk
+    localparam HALF_BIT_TIME  = BIT_TIME / 2;
+    localparam BYTE_TIMEOUT   = (CLK_FREQ * 44) / 1_000_000;
     localparam TIMER_BITS     = $clog2(BYTE_TIMEOUT);
 
-    // FSM 상태 정의
     localparam IDLE              = 0,
                START_BIT_CENTER  = 1,
                DATA_BIT_SAMPLING = 2,
                STOP_BIT_1        = 3,
                STOP_BIT_2        = 4,
-               WAIT_START_BIT    = 5;
+               BYTE_READY_DELAY  = 5,
+               WAIT_START_BIT    = 6;
 
     reg [2:0] state;
     reg [TIMER_BITS-1:0] bit_timer;
     reg [TIMER_BITS-1:0] timeout_counter;
     reg [3:0] bit_index;
     reg [7:0] shift_reg;
+
+    reg [2:0] byte_ready_cnt;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -44,13 +46,12 @@ module ByteReceiver #(
             byte_ready      <= 0;
             byte_done       <= 0;
             error           <= 0;
+            byte_ready_cnt  <= 0;
         end else begin
             byte_ready <= 0;
             byte_done  <= 0;
 
             case (state)
-
-                // --------------------------
                 IDLE: begin
                     if (start_receive) begin
                         bit_timer       <= HALF_BIT_TIME;
@@ -60,11 +61,22 @@ module ByteReceiver #(
                     end
                 end
 
-                // --------------------------
-                DATA_BIT_SAMPLING: begin
-                    if (bit_timer > 0) begin
+                START_BIT_CENTER: begin
+                    if (bit_timer > 0)
                         bit_timer <= bit_timer - 1;
+                    else if (DMX_Input_Signal == 0) begin
+                        bit_timer <= BIT_TIME;
+                        state <= DATA_BIT_SAMPLING;
                     end else begin
+                        error <= 1;
+                        state <= IDLE;
+                    end
+                end
+
+                DATA_BIT_SAMPLING: begin
+                    if (bit_timer > 0)
+                        bit_timer <= bit_timer - 1;
+                    else begin
                         shift_reg <= {DMX_Input_Signal, shift_reg[7:1]};
                         bit_index <= bit_index + 1;
                         bit_timer <= BIT_TIME;
@@ -77,67 +89,52 @@ module ByteReceiver #(
                     end
                 end
 
-                // --------------------------
                 STOP_BIT_1: begin
-                    if (bit_timer > 0) begin
+                    if (bit_timer > 0)
                         bit_timer <= bit_timer - 1;
+                    else if (DMX_Input_Signal == 1) begin
+                        bit_timer <= BIT_TIME;
+                        state <= STOP_BIT_2;
                     end else begin
-                        if (DMX_Input_Signal == 1) begin
-                            bit_timer <= BIT_TIME;
-                            state <= STOP_BIT_2;
-                        end else begin
-                            error <= 1;
-                            state <= IDLE;
-                        end
-						
+                        error <= 1;
+                        state <= IDLE;
                     end
                 end
 
-                // --------------------------
                 STOP_BIT_2: begin
-                    if (bit_timer > 0) begin
+                    if (bit_timer > 0)
                         bit_timer <= bit_timer - 1;
+                    else if (DMX_Input_Signal == 1) begin
+                        error <= 0;
+                        byte_ready_cnt <= 3;  // << 안전하게 3클럭 유지
+                        state <= BYTE_READY_DELAY;
                     end else begin
-                        if (DMX_Input_Signal == 1) begin
-                            byte_ready <= 1;
-                            error <= 0;
-                            state <= WAIT_START_BIT;
-                            timeout_counter <= 0;
-                        end else begin
-                            error <= 1;
-                            state <= IDLE;
-                        end
-						
+                        error <= 1;
+                        state <= IDLE;
                     end
                 end
 
-                // --------------------------
+                BYTE_READY_DELAY: begin
+                    byte_ready <= 1;
+                    if (byte_ready_cnt == 0) begin
+                        state <= WAIT_START_BIT;
+                        timeout_counter <= 0;
+                    end else begin
+                        byte_ready_cnt <= byte_ready_cnt - 1;
+                    end
+                end
+
                 WAIT_START_BIT: begin
                     if (DMX_Input_Signal == 0) begin
                         bit_timer <= HALF_BIT_TIME;
                         bit_index <= 0;
                         state <= START_BIT_CENTER;
                         timeout_counter <= 0;
-                    end else if (timeout_counter < BYTE_TIMEOUT) begin
+                    end else if (timeout_counter < BYTE_TIMEOUT)
                         timeout_counter <= timeout_counter + 1;
-                    end else begin
+                    else begin
                         byte_done <= 1;
                         state <= IDLE;
-                    end
-                end
-
-                // --------------------------
-                START_BIT_CENTER: begin
-                    if (bit_timer > 0) begin
-                        bit_timer <= bit_timer - 1;
-                    end else begin
-                        if (DMX_Input_Signal == 0) begin
-                            bit_timer <= BIT_TIME;
-                            state <= DATA_BIT_SAMPLING;
-                        end else begin
-                            error <= 1;
-                            state <= IDLE;
-                        end
                     end
                 end
             endcase
