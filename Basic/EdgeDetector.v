@@ -8,8 +8,8 @@ module EdgeDetector (
     output reg edge_pulse         // 엣지 발생 시 1클럭 동안 1
 );
 
-    // 2단 동기화 레지스터
-    reg sync_0, sync_1;
+    // 3단 동기화 레지스터
+    reg sync_0, sync_1, sync_2;
 
     // 이전 상태 저장
     reg signal_prev;
@@ -18,19 +18,21 @@ module EdgeDetector (
         if (!rst_n) begin
             sync_0       <= 1'b0;
             sync_1       <= 1'b0;
+            sync_2       <= 1'b0;
             signal_prev  <= 1'b0;
             edge_pulse   <= 1'b0;
         end else begin
-            // 2단 동기화
+            // 3단 동기화
             sync_0 <= signal_in;
             sync_1 <= sync_0;
+            sync_2 <= sync_1;
 
             // edge 검출
-            signal_prev <= sync_1;
+            signal_prev <= sync_2;
             if (edge_type) begin
-                edge_pulse <= (sync_1 == 1'b1 && signal_prev == 1'b0); // rising
+                edge_pulse <= (sync_2 == 1'b1 && signal_prev == 1'b0); // rising
             end else begin
-                edge_pulse <= (sync_1 == 1'b0 && signal_prev == 1'b1); // falling
+                edge_pulse <= (sync_2 == 1'b0 && signal_prev == 1'b1); // falling
             end
         end
     end
