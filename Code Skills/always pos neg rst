@@ -1,5 +1,12 @@
-always @(posedge clk or negedge RST_N) begin
-		if(!RST_N) begin
+
+always @(posedge clk or negedge rst_n) begin
+	if(!rst_n) begin
 			
-		end
 	end
+	else begin
+		
+		
+		
+	end
+	
+end
