@@ -8,6 +8,7 @@ localparam CLK_Freq = 20000000;
 
 
 // PLL for 20MHz
+// EVB clk-in is pin #27
 wire PLL_LOCK;
 wire clk;
 PLL PLL_inst(
