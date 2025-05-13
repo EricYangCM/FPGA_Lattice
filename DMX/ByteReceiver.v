@@ -1,0 +1,98 @@
+module ByteReceiver #(
+    parameter CLK_FREQ   = 20_000_000,
+    parameter BAUD_RATE  = 250_000
+)(
+    input  wire clk,
+    input  wire rst_n,
+
+    input  wire start_receive,         // 항상 1로 주거나 enable 제어
+    input  wire DMX_Input_Signal,      // 비동기 입력
+
+    output reg        byte_ready,      // ★ 1클럭만 HIGH
+    output reg [7:0]  received_byte
+);
+
+    localparam BIT_TIME       = CLK_FREQ / BAUD_RATE;
+    localparam HALF_BIT_TIME  = BIT_TIME / 2;
+
+    localparam IDLE              = 0,
+               WAIT_HALF_BIT     = 1,
+               DATA_BIT_SAMPLING = 2,
+               STOP_BIT          = 3;
+
+    reg [2:0]  state;
+    reg [$clog2(BIT_TIME)-1:0] bit_timer;
+    reg [3:0]  bit_index;
+    reg [7:0]  shift_reg;
+
+    wire start_bit_falling;
+
+    // --- EdgeDetector Instance ---
+    EdgeDetector StartEdgeDetector (
+        .clk(clk),
+        .rst_n(rst_n),
+        .signal_in(DMX_Input_Signal),
+        .edge_type(1'b0),              // Falling edge
+        .edge_pulse(start_bit_falling) // 1클럭만 HIGH
+    );
+
+    // --- FSM ---
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state         <= IDLE;
+            bit_timer     <= 0;
+            bit_index     <= 0;
+            shift_reg     <= 0;
+            received_byte <= 0;
+            byte_ready    <= 0;
+        end else begin
+            byte_ready <= 0;   // 기본값으로 0
+
+            case (state)
+                IDLE: begin
+                    if (start_receive && start_bit_falling) begin
+                        bit_timer <= HALF_BIT_TIME;
+                        bit_index <= 0;
+                        state     <= WAIT_HALF_BIT;
+                    end
+                end
+
+                WAIT_HALF_BIT: begin
+                    if (bit_timer > 0)
+                        bit_timer <= bit_timer - 1;
+                    else begin
+                        bit_timer <= BIT_TIME;
+                        state     <= DATA_BIT_SAMPLING;
+                    end
+                end
+
+                DATA_BIT_SAMPLING: begin
+                    if (bit_timer > 0)
+                        bit_timer <= bit_timer - 1;
+                    else begin
+                        shift_reg <= {DMX_Input_Signal, shift_reg[7:1]};
+                        bit_index <= bit_index + 1;
+                        bit_timer <= BIT_TIME;
+
+                        if (bit_index == 7) begin
+                            received_byte <= {DMX_Input_Signal, shift_reg[7:1]};
+                            state <= STOP_BIT;
+                        end
+                    end
+                end
+
+                STOP_BIT: begin
+                    if (bit_timer > 0)
+                        bit_timer <= bit_timer - 1;
+                    else begin
+                        if (DMX_Input_Signal == 1) begin
+                            byte_ready <= 1;  // ★ 여기서 딱 1클럭만 HIGH
+                        end
+                        state <= IDLE;  // 무조건 다음 상태는 IDLE
+                    end
+                end
+            endcase
+        end
+    end
+
+endmodule
