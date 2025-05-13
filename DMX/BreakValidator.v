@@ -1,7 +1,7 @@
 module BreakValidator #(
     parameter CLK_FREQ = 20_000_000,
-    parameter MIN_WIDTH_US = 88,      // ÃÖ¼Ò 88us
-    parameter MAX_WIDTH_MS = 1000     // ÃÖ´ë 1000ms (1ÃÊ)
+    parameter MIN_WIDTH_US = 88,      // min 88us
+    parameter MAX_WIDTH_MS = 1000     // max 1000ms
 )(
     input  wire clk,
     input  wire rst_n,
