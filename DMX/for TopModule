@@ -1,19 +1,48 @@
-// DMX Input
-localparam DMX_BUFFER_SIZE = 20;
-wire [8*DMX_BUFFER_SIZE:0] DMX_Data_A;
-wire [9:0] DMX_N_Of_Data_A;
-wire DMX_Signal_EN_A;
-DMX_Input_Module #(
-		.CLK_FREQ(12000000),
-		.DMX_BUFFER_SIZE(DMX_BUFFER_SIZE)
-)DMX_In_A(
+	// DMX Input A
+	wire [9:0] DMX_N_Of_Data_A;
+	wire DMX_Signal_EN_A;
+	DMX_Input_Module #(
+		.CLK_FREQ(CLOCK_FREQ)
+	)DMX_In_A(
 		.clk(clk),
 		.rst_n(rst_n),
-		.DMX_Input_Signal(DMX_Input_Signals[0]),
 		
-		.DMX_Data(DMX_Data_A),
-		.N_Of_Data(DMX_N_Of_Data_A),
-		.Signal_EN(DMX_Signal_EN_A)
-);
+		// EBR
+		.EBR_Addr_B(inputA_addrb),
+		.EBR_QB(inputA_qb),
+		
+		// To Port
+		.DMX_Input_Signal(DMX_Input_Signals[0]),
+		.DE(DMX_Input_DE[0]),
+		
+		// DMX Input Data A
+		.Last_Received_ByteCount(DMX_N_Of_Data_A),
+		.Signal_Receiving_LED(DMX_Signal_EN_A)
+	);
 
 
+	// DMX Output #1
+	wire Output_1_Tx_EN;
+	assign Output_1_Tx_EN = DMX_OUT_1_TX_EN & (output_source_req[0] ? DMX_Signal_EN_B : DMX_Signal_EN_A);
+	wire [1:0] DMX_OUT_1_FREQ_MODE;
+	DMX_Output_Module #(
+		.CLK_FREQ(CLOCK_FREQ)
+	)DMX_Out_1(
+		.clk(clk),
+		.rst_n(rst_n),
+		
+		.Channel_Count(output_byte_counts[9:0]),
+		
+		// EBR
+		.EBR_Addr_B(out_addrb[9:0]),
+		.EBR_DataIn_B(out_dinb[7:0]),
+	    .EBR_WrB(out_web[0]),
+		
+		// Tx Control Registers
+		.Enable(Output_1_Tx_EN),
+		.FREQ_MODE(DMX_OUT_1_FREQ_MODE),
+		
+		// To Port
+		.DE(DMX_Output_DE[0]),
+		.DMX_Output_Signal(DMX_Outputs_Signals[0])
+	);
