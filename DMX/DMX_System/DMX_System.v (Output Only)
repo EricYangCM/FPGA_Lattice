@@ -11,8 +11,6 @@ DMX_System #(.CLK_HZ(48_000_000)) u_sys (
   .DE_1(DE_1), .DE_2(DE_2), .DE_3(DE_3), .DE_4(DE_4)
 );
 
-
-
 // ============================================================================
 // DMX_System.v  (ONE-FILE STACK, Lattice FIFO_DC 직접 연결 버전)
 // UART Rx → FIFO_DC → Tokenizer('$'..'*', ',' sep) → Field Assembler → DIM Consumer
