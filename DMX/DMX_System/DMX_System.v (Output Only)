@@ -1,0 +1,3 @@
+// 4채널 기준으로 되어 있음.
+// EBR이랑 FIFO 추가 해야 함. 둘다 8비트로
+// 프로토콜은 UART 115200으로 받으며 $DIM,<PortNum>,<Channel>,<Dimming>*
