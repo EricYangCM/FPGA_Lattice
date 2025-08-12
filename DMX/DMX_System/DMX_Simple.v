@@ -1,13 +1,12 @@
-
 // ============================================================
-// DMX_Simple : UART 수신 + ASCII 파서 + 4채널 EBR Write MUX
+// DMX_Simple (Final, fixed VERI-1380)
+//  - UART(8N1) + ASCII 파서 + 4채널 EBR Write MUX (단일 모듈)
 //  - Frame: '$' + port('0'..'3') + ch('001'..'512') + dim('000'..'255')
-//  - 유효하면 선택 포트의 EBR PortB에 (addr=ch-1, data=dim) 1클럭 write
-//  - DMX_Output_Module은 외부 파일 그대로 사용
+//  - 유효 시 EBR(B)에 (addr=STARTCODE_OFFSET + ch, data=dim) 1클럭 write
 // ============================================================
 module DMX_Simple #(
-    parameter CLK_FREQ   = 20_000_000,
-    parameter UART_BAUD  = 115200
+    parameter CLK_FREQ         = 20_000_000,
+    parameter UART_BAUD        = 115200
 )(
     input  wire clk,
     input  wire rst_n,
@@ -19,117 +18,183 @@ module DMX_Simple #(
     output wire DMX3_DE, output wire DMX3_TX
 );
 
-    // ---------------- UART RX (8N1) ----------------
-    wire       rx_valid;
-    wire [7:0] rx_byte;
+    // ---------------- UART 수신기 (8N1, LSB→MSB 자리지정) ----------------
+    localparam integer DIV = CLK_FREQ / UART_BAUD;
+    localparam integer MID = DIV/2;
 
-    uart_rx #(.CLK_FREQ(CLK_FREQ), .BAUD(UART_BAUD)) U_RX (
-        .clk(clk), .rst_n(rst_n),
-        .rx(uart_rx),
-        .data_out(rx_byte), .data_valid(rx_valid)
-    );
+    reg [15:0] u_cnt;
+    reg [3:0]  u_bitn;
+    reg        u_busy;
+    reg        rx_d, rx_dd;
 
-    // ---------------- 파서 상태 ----------------
-    localparam S_WAIT = 0, S_PORT = 1, S_CH2=2, S_CH1=3, S_CH0=4, S_D2=5, S_D1=6, S_D0=7, S_WRITE=8;
+    reg [7:0]  u_data;     // 수신 바이트
+    reg        u_valid;    // 1클럭 유효
+
+    // 2단 동기화
+    always @(posedge clk) begin
+        rx_d  <= uart_rx;
+        rx_dd <= rx_d;
+    end
+
+    // ---------------- 파서 FSM ----------------
+    localparam S_WAIT=0, S_PORT=1, S_CH2=2, S_CH1=3, S_CH0=4, S_D2=5, S_D1=6, S_D0=7, S_WRITE=8;
     reg [3:0] st;
 
-    // 수집 버퍼(ASCII → digit)
-    reg [3:0] d_ch2, d_ch1, d_ch0;  // 0~9
-    reg [3:0] d_dim2, d_dim1, d_dim0;
-    reg [1:0] port_sel;             // 0~3
+    reg [1:0] port_sel;
+    reg [3:0] d_ch2, d_ch1;  // ch 상위 두 자리
+    reg [3:0] d_d2,  d_d1;   // dim 상위 두 자리
 
-    // 정수값
-    reg [9:0] ch_val;               // 1~512
-    reg [7:0] dim_val;              // 0~255
+    // 자리 계산은 넉넉히(0~999 커버)
+    reg [11:0] ch_calc, dim_calc;
 
-    // ---------------- ASCII → digit helper ----------------
+    // lookahead: S_WRITE 1클럭 동안 들어온 '$' 표시
+    reg        la_dollar;
+
+    // EBR PortB write 신호
+    reg        wr_pulse;       // 1클럭
+    reg [1:0]  wr_port;
+    reg [9:0]  wr_addr;        // 0..1023 가정(EBR 폭에 맞게)
+    reg [7:0]  wr_data;
+
+    // digit 변환 함수
     function [3:0] ascii_to_digit;
         input [7:0] a;
         begin
-            if (a >= 8'd48 && a <= 8'd57) ascii_to_digit = a - 8'd48; // '0'..'9'
-            else                           ascii_to_digit = 4'd15;     // invalid
+            if (a >= "0" && a <= "9") ascii_to_digit = a - "0";
+            else                       ascii_to_digit = 4'd15;
         end
     endfunction
 
-    // ---------------- 파서 FSM ----------------
-    // wr 펄스는 1클럭
-    reg        wr_pulse;
-    reg [9:0]  wr_addr;
-    reg [7:0]  wr_data;
-    reg [1:0]  wr_port;
+    // 현재 u_data를 즉시 digit으로 쓸 수 있게 공용 wire
+    wire [3:0] digit_u = ascii_to_digit(u_data);
 
+    // ===================== 통합 always =====================
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) begin
-            st <= S_WAIT;
-            wr_pulse <= 1'b0;
-            wr_addr <= 10'd0;
-            wr_data <= 8'd0;
-            wr_port <= 2'd0;
+            // UART
+            u_cnt<=0; u_bitn<=0; u_busy<=0; u_valid<=0; u_data<=0;
+            // Parser
+            st<=S_WAIT; la_dollar<=1'b0;
+            d_ch2<=0; d_ch1<=0; d_d2<=0; d_d1<=0;
+            ch_calc<=0; dim_calc<=0;
+            wr_pulse<=1'b0; wr_port<=0; wr_addr<=0; wr_data<=0;
         end else begin
-            wr_pulse <= 1'b0; // 기본값
+            // 기본값
+            u_valid  <= 1'b0;
+            wr_pulse <= 1'b0;
 
-            if (rx_valid) begin
-                case (st)
-                    S_WAIT: begin
-                        if (rx_byte == 8'h24) st <= S_PORT; // '$'
-                        else st <= S_WAIT;                  // 그 외는 모두 무시
-                    end
-                    S_PORT: begin
-                        // '0'~'3'만 허용
-                        if (rx_byte >= "0" && rx_byte <= "3") begin
-                            port_sel <= rx_byte - "0";
-                            st <= S_CH2;
-                        end else begin
-                            st <= S_WAIT; // 무효 포트 → 프레임 폐기
+            // --------- UART 비트 샘플링 ---------
+            if (!u_busy) begin
+                if (rx_dd==1'b0) begin
+                    u_busy <= 1'b1;
+                    u_cnt  <= MID;
+                    u_bitn <= 4'd0;
+                end
+            end else begin
+                if (u_cnt==DIV-1) begin
+                    u_cnt  <= 0;
+                    u_bitn <= u_bitn + 1'b1;
+                    case(u_bitn)
+                        0: ; // start
+                        1: u_data[0] <= rx_dd;
+                        2: u_data[1] <= rx_dd;
+                        3: u_data[2] <= rx_dd;
+                        4: u_data[3] <= rx_dd;
+                        5: u_data[4] <= rx_dd;
+                        6: u_data[5] <= rx_dd;
+                        7: u_data[6] <= rx_dd;
+                        8: u_data[7] <= rx_dd;
+                        9: begin
+                            u_busy  <= 1'b0;
+                            u_valid <= 1'b1;
                         end
-                    end
-                    S_CH2: begin
-                        d_ch2 <= ascii_to_digit(rx_byte);
-                        st    <= (ascii_to_digit(rx_byte) != 4'd15) ? S_CH1 : S_WAIT;
-                    end
-                    S_CH1: begin
-                        d_ch1 <= ascii_to_digit(rx_byte);
-                        st    <= (ascii_to_digit(rx_byte) != 4'd15) ? S_CH0 : S_WAIT;
-                    end
-                    S_CH0: begin
-                        d_ch0 <= ascii_to_digit(rx_byte);
-                        st    <= (ascii_to_digit(rx_byte) != 4'd15) ? S_D2 : S_WAIT;
-                    end
-                    S_D2: begin
-                        d_dim2 <= ascii_to_digit(rx_byte);
-                        st     <= (ascii_to_digit(rx_byte) != 4'd15) ? S_D1 : S_WAIT;
-                    end
-                    S_D1: begin
-                        d_dim1 <= ascii_to_digit(rx_byte);
-                        st     <= (ascii_to_digit(rx_byte) != 4'd15) ? S_D0 : S_WAIT;
-                    end
-                    S_D0: begin
-                        d_dim0 <= ascii_to_digit(rx_byte);
-                        if (ascii_to_digit(rx_byte) != 4'd15) begin
-                            // 여기서 범위 계산/검증
-                            // ch = d2*100 + d1*10 + d0
-                            ch_val  <= (d_ch2*10'd100) + (d_ch1*10'd10) + d_ch0;
-                            // dim = d2*100 + d1*10 + d0 (0~255로 클램프 대신 유효성 체크)
-                            dim_val <= (d_dim2*8'd100) + (d_dim1*8'd10) + d_dim0;
-                            st <= S_WRITE;
-                        end else begin
-                            st <= S_WAIT;
-                        end
-                    end
-                    S_WRITE: begin
-                        // 채널 001~512, 디밍 000~255만 허용
-                        if (ch_val >= 10'd1 && ch_val <= 10'd512 &&
-                            dim_val <= 8'd255) begin
-                            wr_addr  <= ch_val - 10'd1; // 0~511
-                            wr_data  <= dim_val;
-                            wr_port  <= port_sel;
-                            wr_pulse <= 1'b1;           // 1클럭 write
-                        end
-                        st <= S_WAIT; // 한 프레임 처리 후 대기
-                    end
-                    default: st <= S_WAIT;
-                endcase
+                    endcase
+                end else begin
+                    u_cnt <= u_cnt + 1'b1;
+                end
             end
+
+            // --------- lookahead: S_WRITE 동안 들어온 '$' 표시 ---------
+            if (u_valid && st==S_WRITE && u_data==8'h24) begin
+                la_dollar <= 1'b1;
+            end
+
+            // --------- 파서 FSM ---------
+            case (st)
+                S_WAIT: begin
+                    if (la_dollar) begin
+                        la_dollar <= 1'b0;
+                        st <= S_PORT;
+                    end else if (u_valid) begin
+                        if (u_data == 8'h24) st <= S_PORT; // '$'
+                    end
+                end
+
+                S_PORT: begin
+                    if (u_valid) begin
+                        if (u_data>="0" && u_data<="3") begin
+                            port_sel <= u_data - "0";
+                            st <= S_CH2;
+                        end else st <= S_WAIT;
+                    end
+                end
+
+                // ch[2] (백의 자리)
+                S_CH2: if (u_valid) begin
+                    d_ch2 <= digit_u;
+                    st    <= (digit_u != 4'd15) ? S_CH1 : S_WAIT;
+                end
+
+                // ch[1] (십의 자리)
+                S_CH1: if (u_valid) begin
+                    d_ch1 <= digit_u;
+                    st    <= (digit_u != 4'd15) ? S_CH0 : S_WAIT;
+                end
+
+                // ch[0] (일의 자리) → **즉시 계산**
+                S_CH0: if (u_valid) begin
+                    if (digit_u != 4'd15) begin
+                        ch_calc <= (d_ch2 * 12'd100) + (d_ch1 * 12'd10) + digit_u; // 1..512
+                        st <= S_D2;
+                    end else st <= S_WAIT;
+                end
+
+                // dim[2]
+                S_D2: if (u_valid) begin
+                    d_d2 <= digit_u;
+                    st   <= (digit_u != 4'd15) ? S_D1 : S_WAIT;
+                end
+
+                // dim[1]
+                S_D1: if (u_valid) begin
+                    d_d1 <= digit_u;
+                    st   <= (digit_u != 4'd15) ? S_D0 : S_WAIT;
+                end
+
+                // dim[0] → **즉시 계산**
+                S_D0: if (u_valid) begin
+                    if (digit_u != 4'd15) begin
+                        dim_calc <= (d_d2 * 12'd100) + (d_d1 * 12'd10) + digit_u; // 0..255
+                        st <= S_WRITE;
+                    end else st <= S_WAIT;
+                end
+
+                // 쓰기: 스타트코드 0x00은 EBR[0], 채널1은 EBR[1]
+                S_WRITE: begin
+                    if (ch_calc >= 12'd1 && ch_calc <= 12'd512 &&
+                        dim_calc <= 12'd255) begin
+                        wr_port  <= port_sel;
+                        wr_addr  <= ch_calc;
+                        wr_data  <= dim_calc[7:0];
+                        wr_pulse <= 1'b1;                        // 1클럭 write
+                    end
+                    if (la_dollar) begin
+                        la_dollar <= 1'b0; st <= S_PORT;
+                    end else begin
+                        st <= S_WAIT;
+                    end
+                end
+            endcase
         end
     end
 
@@ -146,7 +211,7 @@ module DMX_Simple #(
     end endgenerate
 
     // ---------------- DMX 출력 모듈 4개 ----------------
-    localparam [1:0] FREQ_40HZ = 2'b11;  // 사용자 요청: 주파수 모드 3
+    localparam [1:0] FREQ_40HZ = 2'b11;
     localparam [9:0] CH_COUNT  = 10'd512;
 
     DMX_Output_Module #(.CLK_FREQ(CLK_FREQ)) U_DMX0 (
@@ -180,46 +245,6 @@ module DMX_Simple #(
 endmodule
 
 
-// ------------------------------------------------------------
-// 간단한 UART RX (8N1) - Hub 내부 전용
-// ------------------------------------------------------------
-module uart_rx #(
-    parameter CLK_FREQ = 20_000_000,
-    parameter BAUD     = 115200
-)(
-    input  wire clk, input wire rst_n,
-    input  wire rx,
-    output reg  [7:0] data_out,
-    output reg        data_valid
-);
-    localparam integer DIV = CLK_FREQ / BAUD;
-    localparam integer MID = DIV/2;
-
-    reg [15:0] cnt; reg [3:0] bitn; reg busy;
-    reg rx_d, rx_dd;
-    always @(posedge clk) begin rx_d<=rx; rx_dd<=rx_d; end
-
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            cnt<=0; bitn<=0; busy<=0; data_valid<=0; data_out<=0;
-        end else begin
-            data_valid<=0;
-            if(!busy) begin
-                if(rx_dd==1'b0) begin busy<=1; cnt<=MID; bitn<=0; end
-            end else begin
-                if(cnt==DIV-1) begin
-                    cnt<=0;
-                    bitn<=bitn+1;
-                    case(bitn)
-                        0: ; // start
-                        1,2,3,4,5,6,7,8: data_out <= {rx_dd, data_out[7:1]};
-                        9: begin busy<=0; data_valid<=1; end // stop
-                    endcase
-                end else cnt<=cnt+1;
-            end
-        end
-    end
-endmodule
 
 
 
