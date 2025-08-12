@@ -1,0 +1,55 @@
+
+
+
+
+// UART Rx
+UART_Rx_Stack #(
+  .CLK_HZ(48_000_000),
+  .BAUD(115_200),
+  .MAX_FIELDS(8),
+  .MAX_FIELD_LEN(16)
+) u_uart_stack (
+  .clk(clk),
+  .rst_n(rst_n),
+  .uart_rx(Uart_Rx_in),
+
+  .frame_done(frame_done),
+  .field_count(field_count),
+  .field_len_bus(field_len_bus),
+  .is_digit_only_mask(is_digit_only_mask),
+  .int_values_bus(int_values_bus),
+
+  .rd_field(rd_field),
+  .rd_index(rd_index),
+  .rd_char(rd_char),
+  .rd_char_valid(rd_char_valid),
+
+  .uart_overrun_cnt(uart_overrun_cnt)
+);
+
+// UART RX Frame Consumer
+UART_Frame_Consumer #(
+  .MAX_FIELDS(8),
+  .MAX_FIELD_LEN(16)
+) u_consumer (
+  .clk(clk),
+  .rst_n(rst_n),
+
+  .frame_done(frame_done),
+  .field_count(field_count),
+  .field_len_bus(field_len_bus),
+  .is_digit_only_mask(is_digit_only_mask),
+  .int_values_bus(int_values_bus),
+
+  .rd_field(rd_field),      // 스택의 rd_field/rd_index와 직결
+  .rd_index(rd_index),
+  .rd_char(rd_char),
+  .rd_char_valid(rd_char_valid),
+
+  .cmd_test_valid(cmd_test_valid),
+  .arg1(arg1),
+  .arg2(arg2),
+
+  .unknown_cmd(unknown_cmd),
+  .parse_busy(parse_busy)
+);
